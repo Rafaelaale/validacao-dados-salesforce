@@ -1,0 +1,66 @@
+public with sharing class ValidacaoDados {
+
+    public static void validarContas(List<Account> contas) {
+        Set<String> nomesContas = new Set<String>();
+        Map<String, Account> contasPorNome = new Map<String, Account>();
+
+        for (Account conta : contas) {
+            if (String.isBlank(conta.Name)) {
+                conta.Name.addError('O nome da conta e obrigatorio.');
+                continue;
+            }
+
+            conta.Name = conta.Name.trim();
+            String nomeNormalizado = conta.Name.toLowerCase();
+
+            if (nomesContas.contains(nomeNormalizado)) {
+                conta.Name.addError('Nao e permitido duplicar o nome da conta no mesmo processamento.');
+            } else {
+                nomesContas.add(nomeNormalizado);
+            }
+
+            if (!String.isBlank(conta.Phone)) {
+                String telefone = conta.Phone.replaceAll('[^0-9]', '');
+
+                if (telefone.length() < 10 || telefone.length() > 15) {
+                    conta.Phone.addError('O telefone deve conter entre 10 e 15 numeros.');
+                } else {
+                    conta.Phone = telefone;
+                }
+            }
+
+            if (!String.isBlank(conta.Website)) {
+                String website = conta.Website.trim();
+
+                if (!Pattern.matches('(?i)^https?://.+', website)) {
+                    conta.Website.addError('O site deve comecar com http:// ou https://.');
+                } else {
+                    conta.Website = website;
+                }
+            }
+
+            if (conta.AnnualRevenue != null && conta.AnnualRevenue < 0) {
+                conta.AnnualRevenue.addError('O faturamento anual nao pode ser negativo.');
+            }
+
+            contasPorNome.put(nomeNormalizado, conta);
+        }
+
+        if (nomesContas.isEmpty()) {
+            return;
+        }
+
+        for (Account contaExistente : [
+            SELECT Id, Name
+            FROM Account
+            WHERE Name IN :contasPorNome.keySet()
+        ]) {
+            String nomeExistente = contaExistente.Name.toLowerCase();
+            Account contaAtual = contasPorNome.get(nomeExistente);
+
+            if (contaAtual != null && contaExistente.Id != contaAtual.Id) {
+                contaAtual.Name.addError('Ja existe uma conta cadastrada com este nome.');
+            }
+        }
+    }
+}

@@ -1,0 +1,122 @@
+@IsTest
+private class ValidacaoDadosTest {
+
+    private static Account criarContaValida(String nome) {
+        return new Account(
+            Name = nome,
+            Phone = '11 (98765-4321)',
+            Website = '  https://example.com  ',
+            AnnualRevenue = 1000
+        );
+    }
+
+    @IsTest
+    static void deveCriarContaValidaENormalizarDados() {
+        Account conta = criarContaValida('Teste Conta Valida ' + DateTime.now().getTime());
+
+        Test.startTest();
+        insert conta;
+        Test.stopTest();
+
+        Account contaConsultada = [
+            SELECT Name, Phone, Website, AnnualRevenue
+            FROM Account
+            WHERE Id = :conta.Id
+        ];
+
+        System.assertEquals('11987654321', contaConsultada.Phone);
+        System.assertEquals('https://example.com', contaConsultada.Website);
+        System.assertEquals(1000, contaConsultada.AnnualRevenue);
+    }
+
+    @IsTest
+    static void deveBloquearWebsiteInvalido() {
+        Account conta = criarContaValida('Teste Website Invalido ' + DateTime.now().getTime());
+        conta.Website = 'site-invalido';
+
+        Test.startTest();
+        Database.SaveResult resultado = Database.insert(conta, false);
+        Test.stopTest();
+
+        System.assertEquals(false, resultado.isSuccess());
+        System.assert(
+            resultado.getErrors()[0].getMessage().contains('site deve comecar'),
+            'O Website invalido deveria ser bloqueado.'
+        );
+    }
+
+    @IsTest
+    static void deveBloquearFaturamentoNegativo() {
+        Account conta = criarContaValida('Teste Receita Negativa ' + DateTime.now().getTime());
+        conta.AnnualRevenue = -100;
+
+        Test.startTest();
+        Database.SaveResult resultado = Database.insert(conta, false);
+        Test.stopTest();
+
+        System.assertEquals(false, resultado.isSuccess());
+        System.assert(
+            resultado.getErrors()[0].getMessage().contains('faturamento anual'),
+            'O faturamento negativo deveria ser bloqueado.'
+        );
+    }
+
+    @IsTest
+    static void deveBloquearTelefoneInvalido() {
+        Account conta = criarContaValida('Teste Telefone Invalido ' + DateTime.now().getTime());
+        conta.Phone = '123';
+
+        Test.startTest();
+        Database.SaveResult resultado = Database.insert(conta, false);
+        Test.stopTest();
+
+        System.assertEquals(false, resultado.isSuccess());
+        System.assert(
+            resultado.getErrors()[0].getMessage().toLowerCase().contains('telefone'),
+            'O telefone invalido deveria ser bloqueado.'
+        );
+    }
+
+    @IsTest
+    static void deveBloquearNomesDuplicadosNoMesmoProcessamento() {
+        String nome = 'Teste Nome Duplicado ' + DateTime.now().getTime();
+
+        Account primeiraConta = criarContaValida(nome);
+        Account segundaConta = criarContaValida(nome.toUpperCase());
+
+        Test.startTest();
+        List<Database.SaveResult> resultados =
+            Database.insert(
+                new List<Account>{ primeiraConta, segundaConta },
+                false
+            );
+        Test.stopTest();
+
+        System.assertEquals(true, resultados[0].isSuccess());
+        System.assertEquals(false, resultados[1].isSuccess());
+        System.assert(
+            resultados[1].getErrors()[0].getMessage().contains('duplicar'),
+            'O nome duplicado deveria ser bloqueado.'
+        );
+    }
+
+    @IsTest
+    static void deveBloquearNomeJaExistente() {
+        String nome = 'Teste Nome Existente ' + DateTime.now().getTime();
+
+        Account primeiraConta = criarContaValida(nome);
+        insert primeiraConta;
+
+        Account segundaConta = criarContaValida(nome.toUpperCase());
+
+        Test.startTest();
+        Database.SaveResult resultado = Database.insert(segundaConta, false);
+        Test.stopTest();
+
+        System.assertEquals(false, resultado.isSuccess());
+        System.assert(
+            resultado.getErrors()[0].getMessage().contains('Ja existe'),
+            'O nome ja cadastrado deveria ser bloqueado.'
+        );
+    }
+}
