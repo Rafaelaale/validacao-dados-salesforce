@@ -1,58 +1,56 @@
-# Salesforce DX Project
+# Validação de Dados de Contas no Salesforce
 
-Salesforce DX is a development approach that brings source-driven development, team collaboration, and continuous integration to the Salesforce Platform. Instead of working directly in an org through a web browser, you work with metadata as source files in a local DX project, track changes in version control, and deploy through automated processes.
+Trigger e classe Apex que validam e padronizam os dados de **Contas (Account)** antes de salvar, evitando cadastros duplicados ou inconsistentes.
 
-This project template gets you started with the tools and structure you need to build Salesforce applications using source control, scratch orgs, and the Salesforce CLI.
+## Problema que resolve
 
-## Prerequisites
+Cadastros de contas com nome repetido, telefone fora do padrão, e-mail ou CNPJ inválidos geram retrabalho e dados sujos no CRM. Este projeto bloqueia o que está errado e deixa o que está certo no mesmo formato.
 
-Before you start, make sure you have:
+## Como funciona
 
-- **Salesforce CLI** - Download from [developer.salesforce.com/tools/salesforcecli](https://developer.salesforce.com/tools/salesforcecli). See [Install Salesforce CLI](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_cli.htm) for details.
-- **VS Code with Salesforce Extension Pack** - See [Installation Instructions](https://developer.salesforce.com/docs/platform/sfvscode-extensions/guide/install.html) for details. Includes the Agentforce Vibes extension.
-- **A development org** - Sign up for a free Developer Edition org [here](https://developer.salesforce.com/signup).
-- **Dev Hub enabled** (optional, required to create scratch orgs) - You can enable Dev Hub in your development org under Setup > Dev Hub.  See [Provide Developers Access to Salesforce DX Tools](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_setup_dx_tools.htm).
+```
+Account (before insert / before update)
+   -> ValidacaoContasTrigger
+   -> ValidacaoDados.validarContas(Trigger.new)
+   -> cada regra adiciona um erro à conta, ou normaliza o campo
+```
 
-## Project Structure
+A trigger só chama a classe. Toda a regra de negócio fica em `ValidacaoDados`.
 
-Your DX project follows this structure:
+## Regras implementadas
 
-- **`force-app/main/default/`** - Your metadata source files live in this default package directory. You can configure additional package directories in the `sfdx-project.json` file.
-- **`config/`** - Scratch org definitions and project settings
-- **`scripts/`** - Automation scripts for common tasks
-- **`sfdx-project.json`** - Project manifest that defines package directories, namespace, API version, and other project-level settings
+| Campo | Regra |
+|---|---|
+| Nome | Não pode repetir dentro do mesmo lote nem coincidir com uma conta já existente. A comparação ignora espaços nas pontas e maiúsculas. |
+| Telefone | Aceita 10 ou 11 dígitos. Remove a máscara e grava só os números. |
+| Website | Deve começar com `http://` ou `https://`. |
+| Faturamento anual | Não pode ser negativo. |
+| CNPJ (`CNPJ__c`) | Remove a máscara e exige 14 dígitos. |
+| E-mail (`Email__c`) | Valida o formato e grava em minúsculas. |
 
-See [Salesforce DX Project Configuration](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_ws_config.htm).
+## Boas práticas aplicadas
 
-## Get Started
+- Trigger enxuta, com a lógica numa classe separada.
+- Uma única consulta SOQL por execução, fora de qualquer loop (segura para cargas em lote).
+- Mensagens de erro claras, associadas à conta que falhou.
+- Testes automatizados em `ValidacaoDadosTest`.
 
-Ready to start developing? The [Get Started with Salesforce DX](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_get_started_dx.htm) guide walks you through your first project, from creating a scratch org to creating a simple Apex class or LWC to deploying your code to a sandbox.
+## Tecnologias
 
-## Common Salesforce CLI Commands
+Apex · Apex Trigger · SOQL · expressões regulares (`Pattern`) · Apex Test Classes
 
-Here are common CLI commands that you'll use the most:
+## Como usar
 
-- `sf org login web`: Authorize an org
-- `sf org open`: Open your org in a browser
-- `sf org create scratch`: Create a scratch org
-- `sf project deploy start`: Deploy metadata to your org
-- `sf project retrieve start`: Retrieve metadata from your org
-- `sf template generate <artifact>`: Scaffold new components, such as Apex classes and triggers, LWC components, Lightning apps, and more
-- `sf apex <command>`: Run Apex tests, run anonymous Apex blocks, and view logs
-- `sf data <command>`: Work with test data
-- `sf alias <command>`: Manage org aliases
-- `sf config <command>`: Configure CLI settings
+Faça o deploy para a sua org e rode os testes:
 
-## Use Agentforce Vibes to Build Lightning Apps
+```
+sf project deploy start --source-dir force-app --target-org <alias-da-org>
+sf apex run test --class-names ValidacaoDadosTest --target-org <alias-da-org> --result-format human --wait 10
+```
 
-Transform your ideas into custom Lightning apps that extend CRM workflows directly in Lightning Experience. Through natural conversations with Agentforce Vibes, implement custom objects and fields, complex business logic, and dynamic UI components. See [Build a Lightning App Using Agentforce Vibes](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/lexapp-overview.html).
+Os campos personalizados `CNPJ__c` e `Email__c` precisam existir no objeto Account da org de destino.
 
-## Additional Resources
+## Possíveis melhorias
 
-- [Agentforce Vibes Developer Guide](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/einstein-overview.html)
-- [Salesforce CLI Installation Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_intro.htm)
-- [Salesforce DX Developer Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/)
-- [Salesforce CLI Command Reference](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/)
-- [Salesforce CLI Plugin Development Guide](https://developer.salesforce.com/docs/platform/salesforce-cli-plugin/guide/conceptual-overview.html)
-- [Salesforce VS Code Extensions Documentation](https://developer.salesforce.com/tools/vscode/)
-
+- Validar os dígitos verificadores do CNPJ, e não só a quantidade de dígitos.
+- Mover a lista de regras para metadados customizados, para ligar e desligar regras sem deploy.
